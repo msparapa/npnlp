@@ -80,7 +80,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
     xk = numpy.copy(x0)
     lagrangek = numpy.copy(lagrange0)
     B = numpy.eye(n_states) # Start with B = I to ensure positive definite
-    from ._qp import qp
+    cvxopt.solvers.options['show_progress'] = False
     while running:
         f = costfun(xk)
         df = approx_jacobian(xk, costfun, epsilon)
@@ -129,10 +129,10 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         # Basically delta_j = 1 for all
         # QP solution should give s and lambda (use lambda from QP to update lambda in SQP)
 
-        sol = cvxopt.solvers.qp(P, q, G, h, A, b)
-        s = numpy.array(sol['x']).T[0]
-        lagrange_eq = numpy.array(sol['y']).T[0] # lambda eq
-        lagrange_ineq = numpy.array(sol['z']).T[0] # Lambda ineq
+        qpsol = cvxopt.solvers.qp(P, q, G, h, A, b)
+        s = numpy.array(qpsol['x']).T[0]
+        lagrange_eq = numpy.array(qpsol['y']).T[0] # lambda eq
+        lagrange_ineq = numpy.array(qpsol['z']).T[0] # Lambda ineq
         lagrangek1 = numpy.hstack((lagrange_eq, lagrange_ineq))
 
         # First iteration:
@@ -155,7 +155,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         alpha = fminbound(phi, 0, 2)
         p = alpha * s
         xk1 = xk + p
-        y = approx_jacobian(xk1, lambda _: lagrangian(_, lagrangek) - lagrangian(xk, lagrangek), epsilon)[0]
+        y = (approx_jacobian(xk1, lambda _: lagrangian(_, lagrangek), epsilon) - approx_jacobian(xk, lambda _: lagrangian(_, lagrangek), epsilon))[0]
 
         if numpy.inner(p, y) >= 0.2*B.dot(p).dot(p):
             theta = 1
@@ -165,8 +165,9 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         eta = theta * y + (1 - theta)*B.dot(p)
 
         # BFGS update of the hessian
-        Bk1 = B - B.dot(numpy.outer(p,p)).dot(B) / (B.dot(p).dot(p)) + numpy.dot(eta, eta.T) / eta.dot(p)
+        Bk1 = B - B.dot(numpy.outer(p,p)).dot(B) / (B.dot(p).dot(p)) + numpy.outer(eta, eta) / eta.dot(p)
         print('etas not correct :(')
+        print('and neither is B update double :(')
         breakpoint()
         change = xk1 - xk
         xk = numpy.copy(xk1)
@@ -183,7 +184,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         converged = True
 
     opt['x'] = xk
-    opt['fval'] = 9999999999
+    opt['fval'] = costfun(xk)
     opt['success'] = converged
     opt['lagrange'] = lagrangek
     opt['grad'] = approx_jacobian(xk, costfun, epsilon)

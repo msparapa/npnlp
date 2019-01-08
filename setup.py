@@ -19,6 +19,6 @@ setup(
     license='MIT',
     author='msparapa',
     author_email='msparapa@purdue.edu',
-    description='NumPy-based nonlinear programming and optimization.',
+    description='NumPy and SciPy based nonlinear programming and optimization.',
     install_requires=requirements
 )

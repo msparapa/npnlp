@@ -1,6 +1,5 @@
 from npnlp import minimize
 import numpy as np
-from npnlp import _qp
 
 def J(x):
     return np.array([x[0]**4 + x[1]**2 - x[0]**2*x[1]])
