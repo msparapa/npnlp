@@ -16,7 +16,7 @@ class npnlp_result(dict):
                 'nhev':None,
                 'nit':None,
                 'nsuperit':None,
-                'maxconstv':None}
+                'maxconstrv':None}
         obj.update(obj2)
         return obj
 
@@ -26,7 +26,7 @@ class npnlp_result(dict):
             out += str(key) + ': ' + str(self[key]) + '\n'
         return out
 
-def minimize(costfun, x0=None, A=None, b=None, Aeq=None, beq=None, lb=None, ub=None, nonlconeq=None, nonlconineq=None, options=None, method=None):
+def minimize(costfun, x0=None, lagrange0=None, A=None, b=None, Aeq=None, beq=None, lb=None, ub=None, nonlconeq=None, nonlconineq=None, method=None, **kwargs):
     if method is None:
         raise Exception('\'method\' must be defined.')
 
@@ -38,6 +38,6 @@ def minimize(costfun, x0=None, A=None, b=None, Aeq=None, beq=None, lb=None, ub=N
 
     if method.lower() == 'sqp':
         from ._sqp import sqp
-        opt = sqp(costfun, x0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, options)
+        opt = sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwargs)
 
     return opt
