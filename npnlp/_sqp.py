@@ -74,6 +74,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         raise NotImplementedError
 
     nsuperit = 0
+    nit = 0
     running = True
     converged = False
 
@@ -134,6 +135,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         lagrange_eq = numpy.array(qpsol['y']).T[0] # lambda eq
         lagrange_ineq = numpy.array(qpsol['z']).T[0] # Lambda ineq
         lagrangek1 = numpy.hstack((lagrange_eq, lagrange_ineq))
+        nit += qpsol['iterations']
 
         # First iteration:
         # u_j = |lambda_j| at QP solution for s_1
@@ -190,5 +192,6 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
     opt['grad'] = approx_jacobian(xk, costfun, epsilon)
     opt['hessian'] = B
     opt['nsuperit'] = nsuperit
+    opt['nit'] = nit
 
     return opt
