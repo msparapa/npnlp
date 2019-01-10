@@ -66,10 +66,10 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
             return costfun(x)
     elif n_lconineq == 0:
         def lagrangian(x,l):
-            return costfun(x) + (l.T).dot(nonlconeq(x))
+            return costfun(x) + numpy.inner(l, nonlconeq(x))
     elif n_lconeq == 0:
         def lagrangian(x,l):
-            return costfun(x) + (l.T).dot(nonlconineq(x))
+            return costfun(x) + numpy.inner(l, nonlconineq(x))
     else:
         raise NotImplementedError
 
@@ -134,7 +134,6 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         s = numpy.array(qpsol['x']).T[0]
         lagrange_eq = numpy.array(qpsol['y']).T[0] # lambda eq
         lagrange_ineq = numpy.array(qpsol['z']).T[0] # Lambda ineq
-        lagrangek1 = numpy.hstack((lagrange_eq, lagrange_ineq))
         nit += qpsol['iterations']
 
         # First iteration:
@@ -154,11 +153,14 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         def phi(alpha):
             return costfun(xk + alpha*s) + numpy.inner(uineq, numpy.maximum(0, nonlconineq(xk + alpha*s))) + numpy.inner(lagrange_eq, numpy.maximum(0, abs(nonlconeq(xk + alpha*s))))
 
-        alpha = fminbound(phi, 0, 2)
+        alpha = fminbound(phi, 0, 2) # TODO: Replace this with a more efficient inexact line search
         p = alpha * s
         xk1 = xk + p
-        y = (approx_jacobian(xk1, lambda _: lagrangian(_, lagrangek), epsilon) - approx_jacobian(xk, lambda _: lagrangian(_, lagrangek), epsilon))[0]
+        lagrangek1 = numpy.hstack((lagrange_eq, uineq))
 
+        y = (approx_jacobian(xk1, lambda _: lagrangian(_, lagrangek1), epsilon) - approx_jacobian(xk, lambda _: lagrangian(_, lagrangek1), epsilon))[0]
+
+        # Damped BFGS update of the hessian
         if numpy.inner(p, y) >= 0.2*B.dot(p).dot(p):
             theta = 1
         else:
@@ -166,11 +168,8 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
 
         eta = theta * y + (1 - theta)*B.dot(p)
 
-        # BFGS update of the hessian
-        Bk1 = B - B.dot(numpy.outer(p,p)).dot(B) / (B.dot(p).dot(p)) + numpy.outer(eta, eta) / eta.dot(p)
-        print('etas not correct :(')
-        print('and neither is B update double :(')
-        breakpoint()
+        B = B - B.dot(numpy.outer(p,p)).dot(B) / (B.dot(p).dot(p)) + numpy.outer(eta, eta) / eta.dot(p)
+
         change = xk1 - xk
         xk = numpy.copy(xk1)
         lagrangek = numpy.copy(lagrangek1)
@@ -189,7 +188,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
     opt['fval'] = costfun(xk)
     opt['success'] = converged
     opt['lagrange'] = lagrangek
-    opt['grad'] = approx_jacobian(xk, costfun, epsilon)
+    opt['grad'] = approx_jacobian(xk, costfun, epsilon)[0]
     opt['hessian'] = B
     opt['nsuperit'] = nsuperit
     opt['nit'] = nit
