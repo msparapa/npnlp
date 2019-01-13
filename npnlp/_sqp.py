@@ -4,14 +4,35 @@ import cvxopt
 from scipy.optimize import fminbound
 from scipy.optimize.slsqp import approx_jacobian
 
-def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwargs):
+class kkt_multipliers(object):
+    def __new__(cls, *args, **kwargs):
+        obj = super(kkt_multipliers, cls).__new__(cls)
+        obj.equality_linear = numpy.array([])
+        obj.equality_nonlinear = numpy.array([])
+        obj.inequality_linear = numpy.array([])
+        obj.inequality_nonlinear = numpy.array([])
+        obj.lower = numpy.array([])
+        obj.upper = numpy.array([])
+        return obj
+
+    def __str__(self):
+        out = ''
+        out += 'equality_linear:\t' + str(self.equality_linear)
+        out += '\nequality_nonlinear:\t' + str(self.equality_nonlinear)
+        out += '\ninequality_linear:\t' + str(self.inequality_linear)
+        out += '\ninequality_nonlinear:\t' + str(self.inequality_nonlinear)
+        out += '\nlower:\t' + str(self.lower)
+        out += '\nupper:\t' + str(self.upper)
+        return out
+
+def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwargs):
     """
     A sequential quadratic programming solver. Higher level solver manipulates the problem using
     NumPy and SciPy while the QP subproblems are solved using cvxopt.
 
     :param costfun:
     :param x0:
-    :param lagrange0:
+    :param kkt0:
     :param A:
     :param b:
     :param Aeq:
@@ -24,7 +45,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
     """
     delta_bar = kwargs.get('delta_bar', 0.90)
     max_super_iterations = kwargs.get('max_super_iterations', 100)
-    tolerance = kwargs.get('tolerance', 1e-6)
+    tolerance = kwargs.get('tolerance', 1e-8)
 
     epsilon = tolerance
 
@@ -44,34 +65,35 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
 
     n_states = x0.shape[0]
 
+    if kkt0 is None:
+        kkt0 = kkt_multipliers()
+
     if nonlconeq is None:
         n_lconeq = 0
         def nonlconeq(*args):
             return numpy.array([])
     else:
-        n_lconeq = nonlconeq(x0).shape[0]
+        n_lconeq = nonlconeq(x0, kkt0.equality_nonlinear).shape[0]
 
     if nonlconineq is None:
         n_lconineq = 0
         def nonlconineq(*args):
             return numpy.array([])
     else:
-        n_lconineq = nonlconineq(x0).shape[0]
-
-    if lagrange0 is None:
-        lagrange0 = numpy.zeros(n_lconeq + n_lconineq)
+        n_lconineq = nonlconineq(x0, kkt0.inequality_nonlinear).shape[0]
 
     if n_lconeq == 0 and n_lconineq == 0:
-        def lagrangian(x,l):
+        def lagrangian(x, kkt):
             return costfun(x)
     elif n_lconineq == 0:
-        def lagrangian(x,l):
-            return costfun(x) + numpy.inner(l, nonlconeq(x))
+        def lagrangian(x, kkt):
+            return costfun(x) + numpy.inner(kkt.equality_nonlinear, nonlconeq(x, kkt.equality_nonlinear))
     elif n_lconeq == 0:
-        def lagrangian(x,l):
-            return costfun(x) + numpy.inner(l, nonlconineq(x))
+        def lagrangian(x, kkt):
+            return costfun(x) + numpy.inner(kkt.inequality_nonlinear, nonlconineq(x, kkt.inequality_nonlinear))
     else:
-        raise NotImplementedError
+        def lagrangian(x, kkt):
+            return costfun(x) + numpy.inner(kkt.equality_nonlinear, nonlconeq(x, kkt.equality_nonlinear)) + numpy.inner(kkt.inequality_nonlinear, nonlconineq(x, kkt.inequality_nonlinear))
 
     nsuperit = 0
     nit = 0
@@ -79,7 +101,13 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
     converged = False
 
     xk = numpy.copy(x0)
-    lagrangek = numpy.copy(lagrange0)
+    kktk = kkt_multipliers()
+    kktk.equality_linear = numpy.copy(kktk.equality_linear)
+    kktk.equality_nonlinear = numpy.copy(kktk.equality_nonlinear)
+    kktk.inequality_linear = numpy.copy(kktk.inequality_linear)
+    kktk.inequality_nonlinear = numpy.copy(kktk.inequality_nonlinear)
+    kktk.lower = numpy.copy(kktk.lower)
+    kktk.upper = numpy.copy(kktk.upper)
     B = numpy.eye(n_states) # Start with B = I to ensure positive definite
     cvxopt.solvers.options['show_progress'] = False
     while running:
@@ -94,16 +122,16 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         # delta_j = 1 if g_j(x) < 0 (satisfied constraint)
         # delta_j = deltabar if g_j(x) >= 0 (active/violated constraint)
         if n_lconineq > 0:
-            dg = approx_jacobian(xk, nonlconineq, epsilon)
-            nonlconineq_eval = nonlconineq(xk)
+            dg = approx_jacobian(xk, lambda _: nonlconineq(_, kktk.inequality_nonlinear), epsilon)
+            nonlconineq_eval = nonlconineq(xk, kktk.inequality_nonlinear)
             nonlconineq_satisfied = nonlconineq_eval < 0
             delta = numpy.array([1 if satisfied else delta_bar for satisfied in nonlconineq_satisfied])
         else:
             nonlconineq_eval = numpy.array([])
 
         if n_lconeq > 0:
-            dh = approx_jacobian(xk, nonlconeq, epsilon)
-            nonlconeq_eval = nonlconeq(xk)
+            dh = approx_jacobian(xk, lambda _: nonlconeq(_, kktk.equality_nonlinear), epsilon)
+            nonlconeq_eval = nonlconeq(xk, kktk.equality_nonlinear)
             nonlconeq_satisfied = numpy.abs(nonlconeq_eval) < tolerance
         else:
             nonlconeq_eval = numpy.array([])
@@ -134,6 +162,7 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         s = numpy.array(qpsol['x']).T[0]
         lagrange_eq = numpy.array(qpsol['y']).T[0] # lambda eq
         lagrange_ineq = numpy.array(qpsol['z']).T[0] # Lambda ineq
+
         nit += qpsol['iterations']
 
         # First iteration:
@@ -146,19 +175,23 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
 
         if nsuperit == 0:
             uineq = abs(lagrange_ineq)
+            ueq = abs(lagrange_eq)
         else:
-            uineq = numpy.maximum(abs(lagrange_ineq), 1/2*(uineq + abs(lagrange_ineq)))
+            uineq = numpy.maximum(abs(lagrange_ineq), 1 / 2*(uineq + abs(lagrange_ineq)))
+            ueq = numpy.maximum(abs(lagrange_eq), 1 / 2 * (ueq + abs(lagrange_eq)))
 
         # Get step size
         def phi(alpha):
-            return costfun(xk + alpha*s) + numpy.inner(uineq, numpy.maximum(0, nonlconineq(xk + alpha*s))) + numpy.inner(lagrange_eq, numpy.maximum(0, abs(nonlconeq(xk + alpha*s))))
+            return costfun(xk + alpha*s) + numpy.inner(uineq, numpy.maximum(0, nonlconineq(xk + alpha*s, kktk))) + numpy.inner(ueq, numpy.maximum(0, abs(nonlconeq(xk + alpha*s, kktk))))
 
         alpha = fminbound(phi, 0, 2) # TODO: Replace this with a more efficient inexact line search
         p = alpha * s
         xk1 = xk + p
-        lagrangek1 = numpy.hstack((lagrange_eq, uineq))
 
-        y = (approx_jacobian(xk1, lambda _: lagrangian(_, lagrangek1), epsilon) - approx_jacobian(xk, lambda _: lagrangian(_, lagrangek1), epsilon))[0]
+        kktk.equality_nonlinear = lagrange_eq
+        kktk.inequality_nonlinear = lagrange_ineq
+
+        y = (approx_jacobian(xk1, lambda _: lagrangian(_, kktk), epsilon) - approx_jacobian(xk, lambda _: lagrangian(_, kktk), epsilon))[0]
 
         # Damped BFGS update of the hessian
         if numpy.inner(p, y) >= 0.2*B.dot(p).dot(p):
@@ -172,7 +205,6 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
 
         change = xk1 - xk
         xk = numpy.copy(xk1)
-        lagrangek = numpy.copy(lagrangek1)
         nsuperit += 1
 
         if all(abs(change) < tolerance):
@@ -181,13 +213,13 @@ def sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, 
         if nsuperit > max_super_iterations:
             running = False
 
-    if all(abs(nonlconeq_eval) < tolerance) and all(nonlconineq_eval < tolerance):
+    if all(abs(nonlconeq_eval) < tolerance) and all(nonlconineq_eval < tolerance) and qpsol['status'] == 'optimal':
         converged = True
 
     opt['x'] = xk
     opt['fval'] = costfun(xk)
     opt['success'] = converged
-    opt['lagrange'] = lagrangek
+    opt['kkt'] = kktk
     opt['grad'] = approx_jacobian(xk, costfun, epsilon)[0]
     opt['hessian'] = B
     opt['nsuperit'] = nsuperit

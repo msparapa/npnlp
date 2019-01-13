@@ -1,7 +1,22 @@
 npnlp
 =====
 
-Installation
-============
+NumPy and SciPy-based nonlinear programming and optimization.
 
-    NONE
+Available Solvers
+-----------------
+
+Sequential Quadratic Programming (SQP)
+
+Installation
+------------
+
+Using git source files
+
+    $ git clone https://github.com/msparapa/npnlp
+    $ cd npnlp
+    $ pip install -e .
+
+Using pypi
+
+    $ pip install npnlp
