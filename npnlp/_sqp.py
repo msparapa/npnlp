@@ -173,12 +173,12 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
             # TODO: This entire "reshaping" can be done using pure LA and no goofy if-then statements. IDK how though ATM
             la_append = None
             for rrow in range(Momit.shape[0]):
-                # breakpoint()
-                amt = (abs(numpy.array([numpy.inner(M[row,:], Momit[rrow,:])/(numpy.linalg.norm(M[row,:])*numpy.linalg.norm(Momit[rrow,:])) for row in range(rshape)]) - 1) < 1e-8).astype(numpy.float64)
+                ind = numpy.argmax([numpy.inner(M[row,:], Momit[rrow,:])/(numpy.linalg.norm(M[row,:])*numpy.linalg.norm(Momit[rrow,:])) for row in range(rshape)])
                 if la_append is None:
-                    la_append = numpy.array([numpy.inner(la,amt)])
+                    la_append = la[ind]
                 else:
-                    la_append = numpy.hstack((la_append, numpy.inner(la,amt)))
+                    la_append = numpy.hstack((la_append, la[ind]))
+
             la = numpy.hstack((la, la_append))
             kktk.equality_nonlinear = Q.dot(la)
 
