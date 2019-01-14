@@ -118,8 +118,7 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
         else:
             nonlconeq_eval = numpy.array([])
 
-        P = cvxopt.matrix(B)
-        q = cvxopt.matrix(df[0])
+        q = df[0]
         if n_lconineq > 0 and len(A) > 0:
             G = cvxopt.matrix(numpy.hstack((dg, A)))
             h = cvxopt.matrix(numpy.hstack((-delta*nonlconineq_eval, b)))
@@ -159,16 +158,19 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
             Momit = M[rshape:,:]
             tfull = M[:, -1]
 
-        qpsol = cvxopt.solvers.qp(P, q, G, h, cvxopt.matrix(R), cvxopt.matrix(t))
+        try:
+            qpsol = cvxopt.solvers.qp(cvxopt.matrix(B), cvxopt.matrix(q), G, h, cvxopt.matrix(R), cvxopt.matrix(t))
+        except:
+            qpsol['status'] = 'Nope!'
+
 
         s = numpy.array(qpsol['x']).T[0]
         kktk.equality_linear = numpy.array(qpsol['y']).T[0][:len(beq)]
         kktk.equality_nonlinear = numpy.array(qpsol['y']).T[0][len(beq):]
         kktk.inequality_linear = numpy.array(qpsol['z']).T[0][:len(b)]
         kktk.inequality_nonlinear = numpy.array(qpsol['z']).T[0][len(b):]
-        # array([0.37777781, 2.98055554])
         la = kktk.equality_nonlinear
-        # Ma = M
+
         if reshaped:
             # TODO: This entire "reshaping" can be done using pure LA and no goofy if-then statements. IDK how though ATM
             la_append = None
@@ -183,14 +185,6 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
             kktk.equality_nonlinear = Q.dot(la)
 
         nit += qpsol['iterations']
-
-        # First iteration:
-        # u_j = |lambda_j| at QP solution for s_1
-        # solve phi, inexact line search
-        # xk1 = xk + alpha s_1
-        # Iterations 2 and beyond
-        # u_j = max(|lambda_j|, 1/2(u'_j + |lambda_j|)
-        # lambda_j's just came from the QP problem, u'_j is previous value of u_j
 
         if nsuperit == 0:
             uineq = abs(kktk.inequality_nonlinear)
