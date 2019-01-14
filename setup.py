@@ -13,7 +13,7 @@ with open(os.path.join(dir_setup, 'npnlp', 'release.py')) as f:
 
 setup(
     name='npnlp',
-    version='0.0.1',
+    version=__version__,
     packages=['npnlp'] + modules + tests,
     url='https://github.com/msparapa/npnlp',
     license='MIT',
