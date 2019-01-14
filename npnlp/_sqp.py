@@ -33,24 +33,30 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
     opt = npnlp_result()
 
     if A is None:
-        A = numpy.array([])
+        A = numpy.empty((0, len(x0)))
     else:
         A = A.astype(numpy.float64)
 
     if b is None:
-        b = numpy.array([])
+        b = numpy.empty((0,1))
     else:
         b = b.astype(numpy.float64)
 
     if Aeq is None:
-        Aeq = numpy.array([])
+        Aeq = numpy.empty((0, len(x0)))
     else:
         Aeq = Aeq.astype(numpy.float64)
 
     if beq is None:
-        beq = numpy.array([])
+        beq = numpy.empty((0,1))
     else:
         beq = beq.astype(numpy.float64)
+
+    if lb is not None:
+        raise NotImplementedError
+
+    if ub is not None:
+        raise NotImplementedError
 
     n_states = x0.shape[0]
 
@@ -121,26 +127,26 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
         q = df[0]
         if n_lconineq > 0 and len(A) > 0:
             G = numpy.hstack((dg, A))
-            h = numpy.hstack((-delta*nonlconineq_eval, b))
+            h = numpy.hstack((-delta*nonlconineq_eval, b - A.dot(xk)))
         elif n_lconineq > 0:
             G = dg
             h = -delta*nonlconineq_eval
         elif len(A) > 0:
             G = A
-            h = b
+            h = b - A.dot(xk)
         else:
             G = None
             h = None
 
         if n_lconeq > 0 and len(Aeq) > 0:
             R = numpy.hstack((dh, Aeq))
-            t = numpy.hstack((-delta_bar*nonlconeq_eval, beq))
+            t = numpy.hstack((-delta_bar*nonlconeq_eval, beq - Aeq.dot(xk)))
         elif n_lconeq > 0:
             R = dh
             t = -delta_bar*nonlconeq_eval
         elif len(Aeq) > 0:
             R = Aeq
-            t = beq
+            t = beq - Aeq.dot(xk)
         else:
             R = None
             t = None
@@ -212,7 +218,9 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
         # Get step size
         def phi(alpha):
             return costfun(xk + alpha*s) + numpy.inner(uineq, numpy.maximum(0, nonlconineq(xk + alpha*s, kktk))) +\
-                   numpy.inner(ueq, abs(nonlconeq(xk + alpha*s, kktk)))
+                   numpy.inner(ueq, abs(nonlconeq(xk + alpha*s, kktk))) +\
+                   numpy.inner(kktk.equality_linear, Aeq.dot(xk + s*alpha) - beq) +\
+                   numpy.inner(kktk.inequality_linear, A.dot(xk + s*alpha) - b)
 
         alpha = fminbound(phi, 0, 2) # TODO: Replace this with a more efficient inexact line search
         p = alpha * s
