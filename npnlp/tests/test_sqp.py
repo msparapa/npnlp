@@ -7,7 +7,7 @@ def test_sqp1():
     def J(x):
         return np.array([x[0] ** 4 + x[1] ** 2 - x[0] ** 2 * x[1]])
 
-    def eq_con(x, l):
+    def eq_con(x, kkt):
         return np.array([1 - 2 * x[0] * x[1] / 3, (3 * x[0] ** 2 - 4 * x[1]) / 3 + 1])
 
     x0 = np.array([0.5, 3.0])

@@ -1,3 +1,5 @@
+import numpy as np
+
 methods = ['sqp']
 
 class npnlp_result(dict):
@@ -7,7 +9,7 @@ class npnlp_result(dict):
                 'fval':None,
                 'exitflag':None,
                 'message':None,
-                'lagrange':None,
+                'kkt':None,
                 'grad':None,
                 'hessian':None,
                 'success':None,
@@ -26,7 +28,28 @@ class npnlp_result(dict):
             out += str(key) + ': ' + str(self[key]) + '\n'
         return out
 
-def minimize(costfun, x0=None, lagrange0=None, A=None, b=None, Aeq=None, beq=None, lb=None, ub=None, nonlconeq=None, nonlconineq=None, method=None, **kwargs):
+class kkt_multipliers(object):
+    def __new__(cls, *args, **kwargs):
+        obj = super(kkt_multipliers, cls).__new__(cls)
+        obj.equality_linear = np.array([])
+        obj.equality_nonlinear = np.array([])
+        obj.inequality_linear = np.array([])
+        obj.inequality_nonlinear = np.array([])
+        obj.lower = np.array([])
+        obj.upper = np.array([])
+        return obj
+
+    def __str__(self):
+        out = ''
+        out += 'equality_linear:\t' + str(self.equality_linear)
+        out += '\nequality_nonlinear:\t' + str(self.equality_nonlinear)
+        out += '\ninequality_linear:\t' + str(self.inequality_linear)
+        out += '\ninequality_nonlinear:\t' + str(self.inequality_nonlinear)
+        out += '\nlower:\t' + str(self.lower)
+        out += '\nupper:\t' + str(self.upper)
+        return out
+
+def minimize(costfun, x0=None, kkt0=None, A=None, b=None, Aeq=None, beq=None, lb=None, ub=None, nonlconeq=None, nonlconineq=None, method=None, **kwargs):
     if method is None:
         raise Exception('\'method\' must be defined.')
 
@@ -38,6 +61,6 @@ def minimize(costfun, x0=None, lagrange0=None, A=None, b=None, Aeq=None, beq=Non
 
     if method.lower() == 'sqp':
         from ._sqp import sqp
-        opt = sqp(costfun, x0, lagrange0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwargs)
+        opt = sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwargs)
 
     return opt
