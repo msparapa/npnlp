@@ -120,14 +120,14 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
 
         q = df[0]
         if n_lconineq > 0 and len(A) > 0:
-            G = cvxopt.matrix(numpy.hstack((dg, A)))
-            h = cvxopt.matrix(numpy.hstack((-delta*nonlconineq_eval, b)))
+            G = numpy.hstack((dg, A))
+            h = numpy.hstack((-delta*nonlconineq_eval, b))
         elif n_lconineq > 0:
-            G = cvxopt.matrix(dg)
-            h = cvxopt.matrix(-delta*nonlconineq_eval)
+            G = dg
+            h = -delta*nonlconineq_eval
         elif len(A) > 0:
-            G = cvxopt.matrix(A)
-            h = cvxopt.matrix(b)
+            G = A
+            h = b
         else:
             G = None
             h = None
@@ -147,19 +147,35 @@ def sqp(costfun, x0, kkt0, A, b, Aeq, beq, lb, ub, nonlconeq, nonlconineq, **kwa
 
         rshape = numpy.linalg.matrix_rank(R)
         reshaped = False
-        if numpy.linalg.matrix_rank(R) < R.shape[0]:
-            reshaped = True
-            pshape = B.shape[0]
-            Q, L, U = lu(numpy.column_stack((R, t)))
-            M = L.dot(U)
-            R = M[:rshape, :-1]
-            t = M[:rshape, -1]
-            Rfull = M[:,:-1]
-            Momit = M[rshape:,:]
-            tfull = M[:, -1]
+        if R is not None:
+            if numpy.linalg.matrix_rank(R) < R.shape[0]:
+                reshaped = True
+                pshape = B.shape[0]
+                Q, L, U = lu(numpy.column_stack((R, t)))
+                M = L.dot(U)
+                R = M[:rshape, :-1]
+                t = M[:rshape, -1]
+                Rfull = M[:,:-1]
+                Momit = M[rshape:,:]
+                tfull = M[:, -1]
 
         try:
-            qpsol = cvxopt.solvers.qp(cvxopt.matrix(B), cvxopt.matrix(q), G, h, cvxopt.matrix(R), cvxopt.matrix(t))
+            _1 = cvxopt.matrix(B)
+            _2 = cvxopt.matrix(q)
+            if G is None:
+                _3 = None
+                _4 = None
+            else:
+                _3 = cvxopt.matrix(G)
+                _4 = cvxopt.matrix(h)
+
+            if R is None:
+                _5 = None
+                _6 = None
+            else:
+                _5 = cvxopt.matrix(R)
+                _6 = cvxopt.matrix(t)
+            qpsol = cvxopt.solvers.qp(_1, _2, _3, _4, _5, _6)
         except:
             qpsol['status'] = 'Nope!'
 

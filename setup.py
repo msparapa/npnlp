@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 modules = []
-tests = []
+tests = ['npnlp.tests']
 
 dir_setup = os.path.dirname(os.path.realpath(__file__))
 with open(os.path.join(dir_setup, 'npnlp', 'release.py')) as f:
